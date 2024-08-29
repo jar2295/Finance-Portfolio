@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>My Website</title>
+<link rel="stylesheet" href="style.css">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+</head>
+<body>
+    <div class="header" id="main-header">
+        <a class="brand" href="index.html"><img class="main-logo" src="img/bull.png"></a>
+        <a class="brand" href="index.html"><h1>MY WEBSITE</h1></a>
+    </div>
+    <div class="topnav">
+        <a class="nav-buttons" href="models.html">Financial Models</a>
+        <a class="nav-buttons" href="calculators.html">Calculators</a>
+        <a class="nav-buttons" href="about.html">About</a>
+    </div>
+
+    <div class="header secondary-header" id="secondary-header">
+        <a class="brand" href="index.html"><img class="secondary-logo" src="img/bull.png"></a>
+        <a class="brand" href="index.html"><h2>MY WEBSITE</h2></a>
+        <div class="second-nav">
+            <a class="nav-buttons" href="models.html">Financial Models</a>
+            <a class="nav-buttons" href="calculators.html">Calculators</a>
+            <a class="nav-buttons" href="about.html">About</a>
+        </div>
+    </div>
+
+
+    <div class="main">
+        <p>Your main content goes here...</p>  
+    </div>
+
+</body>
+</html>
+
+
+<script>
+// JavaScript to handle scroll events and toggle headers
+
+window.onscroll = function() { toggleHeaders() };
+
+function toggleHeaders() {
+    var mainHeader = document.getElementById("main-header");
+    var secondaryHeader = document.getElementById("secondary-header");
+
+    // If the page is scrolled down more than 100px
+    if (document.body.scrollTop > 100 || document.documentElement.scrollTop > 100) {
+        mainHeader.style.top = "-100px";  // Hide main header
+        secondaryHeader.style.top = "0";  // Show secondary header
+    } else {
+        mainHeader.style.top = "0";  // Show main header
+        secondaryHeader.style.top = "-80px";  // Hide secondary header
+    }
+}
+
+</script>
