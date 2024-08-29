@@ -10,23 +10,27 @@ from fredapi import Fred
 import tkinter as tk
 from bs4 import BeautifulSoup
 import requests
-from sklearn.linear_model import LinearRegression
+import openpyxl
+import xlsxwriter
+import os
+
+
 # Display all rows
 pd.set_option('display.max_rows', None)
 pd.set_option('display.float_format', '{:.2f}'.format)
 
 # Global variables
 ticker_input = "aapl"
-ticker = yf.Ticker(ticker_input) 
+
 pd.set_option('display.max_rows', None)
 years = 5
 end_date = dt.datetime.now()
 start_date = end_date - dt.timedelta(days=365 * 10)
 tax_rate = 0.29
 
-def retrieve_data(ticker, ticker_input):
+def retrieve_data( ticker_input):
     # Create the yfinance Ticker object
-
+    ticker = yf.Ticker(ticker_input) 
     balance_sheet = ticker.balancesheet.iloc[:, 0:4].iloc[:, ::-1]
     income_statement = ticker.financials.iloc[:, 0:4].iloc[:, ::-1]
     cash_flow_statement = ticker.cashflow.iloc[:, 0:4].iloc[:, ::-1]
@@ -40,8 +44,8 @@ def retrieve_data(ticker, ticker_input):
     df_income_statement = pd.DataFrame(income_statement)
     df_cash_flow_statement = pd.DataFrame(cash_flow_statement)
 
-    return df_balance_sheet, df_income_statement, df_cash_flow_statement, historical_data, sp500_data, income_statement, info
-df_balance_sheet, df_income_statement, df_cash_flow_statement, historical_data, sp500_data, income_statement, info = retrieve_data(ticker, ticker_input)
+    return ticker, df_balance_sheet, df_income_statement, df_cash_flow_statement, historical_data, sp500_data, income_statement, info
+
 
 def metric_calculations(df_balance_sheet, df_income_statement, df_cash_flow_statement, historical_data, sp500_data, ticker):
 # Extract adjusted closing prices
@@ -110,7 +114,6 @@ def metric_calculations(df_balance_sheet, df_income_statement, df_cash_flow_stat
 
 
     return beta1, beta_calculated, beta, risk_free_rate, risk_premium, cost_of_equity, market_value_of_debt, market_value_of_equity, WACC, weight_of_debt, weight_of_equity, after_tax_cost_of_debt
-beta1, beta_calculated, beta, risk_free_rate, risk_premium, cost_of_equity, market_value_of_debt, market_value_of_equity, WACC, weight_of_debt, weight_of_equity, after_tax_cost_of_debt = metric_calculations(df_balance_sheet, df_income_statement, df_cash_flow_statement, historical_data, sp500_data, ticker)
 
 def revenue_growth_rate(income_statement):
     
@@ -133,7 +136,6 @@ def revenue_growth_rate(income_statement):
     growth = (CAGR + average_yoy_growth + rolling_growth_rate.mean() + geometric_mean_growth_rate) / 4
 
     return growth, ending_value, revenue_series
-growth, ending_value, revenue_series = revenue_growth_rate(income_statement)
 
 def projected_figures(df_income_statement, income_statement, growth, ticker):
     #retrieve figures
@@ -168,10 +170,10 @@ def projected_figures(df_income_statement, income_statement, growth, ticker):
         for year in range(1, years + 1):
             future_ebit = most_recent_ebit * ((1 + ebit_growth_rate) ** year)
             projected_ebit2.append(future_ebit)
-        projected_ebit2 = pd.Series(projected_ebit2, index=future_years, name='Projected Revenue')
+        projected_ebit2 = pd.Series(projected_ebit2, index=future_years, name='Projected EBIT')
 
         #average the two methods
-        projected_ebit = (projected_ebit1 + projected_ebit2)/2
+        projected_ebit = pd.Series(((projected_ebit1 + projected_ebit2)/2), name='Projected Ebit')
         return projected_ebit
     projected_ebit = project_ebit()
 
@@ -317,7 +319,6 @@ def projected_figures(df_income_statement, income_statement, growth, ticker):
 
 
     return projected_cogs, combined_nwc,historical_nwc, AR_Days, AR_av_days, projected_revenue_series, projected_ebit, projected_change_in_nwc, projected_capex, projected_depreciation_df, Projected_Current_Assets, Projected_Current_Liabilities, projected_ar, projected_inventory, projected_OCA, projected_cash, projected_AP, projected_current_debt, projected_OCL
-projected_cogs, combined_nwc, historical_nwc, AR_Days, AR_av_days, projected_revenue_series, projected_ebit, projected_change_in_nwc, projected_capex, projected_depreciation_df, Projected_Current_Assets, Projected_Current_Liabilities, projected_ar, projected_inventory, projected_OCA, projected_cash, projected_AP, projected_current_debt, projected_OCL = projected_figures(df_income_statement, income_statement, growth, ticker)
 
 def calculate_fcff(projected_ebit, projected_change_in_nwc, projected_capex, projected_depreciation_df):
     # Ensure all inputs are pandas Series/DataFrames with numeric data
@@ -335,7 +336,6 @@ def calculate_fcff(projected_ebit, projected_change_in_nwc, projected_capex, pro
         return projected_fcff, nopat
     else:
         raise ValueError("All inputs must be pandas Series or DataFrames containing numeric data.")
-projected_fcff, nopat = calculate_fcff(projected_ebit, projected_change_in_nwc, projected_capex, projected_depreciation_df)
 
 def calculate_terminal_value(projected_fcff, WACC, ticker):
     #terminal growth rate
@@ -347,10 +347,9 @@ def calculate_terminal_value(projected_fcff, WACC, ticker):
 
     last_fcff = projected_fcff.iloc[-1]
  
-    terminal_value = (last_fcff * (1 + 0.02))/(WACC - 0.02)
+    terminal_value = (last_fcff * (1 + terminal_growth))/(WACC - terminal_growth)
 
     return last_fcff, terminal_value, free_cash_flow, first_cash_flow, last_cash_flow, terminal_growth
-last_fcff, terminal_value, free_cash_flow, first_cash_flow, last_cash_flow, terminal_growth  = calculate_terminal_value(projected_fcff, WACC, ticker)
 
 def discount(projected_fcff, terminal_value, growth, WACC):
     # Number of periods (length of FCFF list)
@@ -365,7 +364,6 @@ def discount(projected_fcff, terminal_value, growth, WACC):
     # Sum of discounted FCFFs and discounted terminal value
     enterprise_value = sum(discounted_fcffs) + discounted_terminal_value
     return enterprise_value
-enterprise_value = discount(projected_fcff, terminal_value, growth, WACC)
 
 def value(enterprise_value, ticker, info):
     shares_outstanding = info.get('sharesOutstanding', 'Data not available')
@@ -385,58 +383,87 @@ def value(enterprise_value, ticker, info):
         print(f"Potential Downside: ${variance}, per share")
 
     return intrinsic_price
-intrinsic_price = value(enterprise_value, ticker, info)
 
 
-# Print results
-print("Base Metrics")
-print(f"Ticker: {ticker}")
-print(f"Beta: {beta:.4f}")
-print(f"Risk Free Rate: {risk_free_rate:.4f}")
-print(f"Risk Premium: {risk_premium:.4f}")
-print(f"Cost of Equity: {cost_of_equity:.4f}")
-print(f"After Tax Cost of Debt: {after_tax_cost_of_debt:.4f}")
-print(f"Weight of Debt: {weight_of_debt:.4f}")
-print(f"Weight of Equity: {weight_of_equity:.4f}")
-print(f"WACC: {WACC:.4f}")
+def debug_data(data, name):
+    print(f"--- {name} ---")
+    if isinstance(data, pd.Series):
+        print(data.head())
+    elif isinstance(data, pd.DataFrame):
+        print(data.head())
+    else:
+        print("Unknown type")
+    print("--------------------")
+
+import os
+
+def export_to_excel(ticker_input, projected_revenue_series, projected_ebit, projected_change_in_nwc):
+    try:
+        debug_data(projected_revenue_series, 'Projected Revenue Series')
+        debug_data(projected_ebit, 'Projected EBIT')
+        debug_data(projected_change_in_nwc, 'Projected Change in NWC')
+
+        if projected_revenue_series.empty or projected_ebit.empty or projected_change_in_nwc.empty:
+            raise ValueError("One or more DataFrames/Series to export are empty.")
+
+        # Get the directory of the current script
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        
+        # Define the path for the output file
+        output_file_path = os.path.join(script_dir, f'{ticker_input}_output.xlsx')
+        
+        # Create an ExcelWriter object using XlsxWriter
+        with pd.ExcelWriter(output_file_path, engine='xlsxwriter') as writer:
+            # Export each DataFrame/Series to a different sheet
+            projected_revenue_series.to_excel(writer, sheet_name='Projected Revenue')
+            projected_ebit.to_excel(writer, sheet_name='Projected EBIT')
+            projected_change_in_nwc.to_excel(writer, sheet_name='Projected NWC')
+
+            # Access the workbook and sheet objects for formatting
+            workbook = writer.book
+
+            # Projected Revenue formatting
+            worksheet = writer.sheets['Projected Revenue']
+            worksheet.set_column('A:A', 25)
+
+            # Projected EBIT formatting
+            worksheet = writer.sheets['Projected EBIT']
+            worksheet.set_column('A:A', 25)
+
+            # Projected NWC formatting
+            worksheet = writer.sheets['Projected NWC']
+            worksheet.set_column('A:A', 25)
+
+        print(f"Data exported successfully to {output_file_path}")
+
+    except ValueError as ve:
+        print(f"ValueError: {ve}")
+    except Exception as e:
+        print(f"Error exporting to Excel: {e}")
 
 
-print("revenue")
-print(revenue_series)
-print(projected_revenue_series)
-print("cogs")
-print(ticker.financials.loc["Cost Of Revenue"].iloc[::-1])
-print(projected_cogs.iloc[::-1])
-print("ebit")
-print(ticker.financials.loc["EBIT"])
-print(projected_ebit)
-print()
-print("current assets")
-print(Projected_Current_Assets)
-print("current Liabilities")
-print(Projected_Current_Liabilities)
-print()
-print("NWC")
-print(combined_nwc)
-print("CAPEX")
-print(projected_capex)
-print("depreciation")
-print(ticker.cash_flow.loc["Depreciation And Amortization"])
-print(projected_depreciation_df.iloc[::-1])
-print()
-print()
-print("Free Cash FLow")
-print(ticker.cash_flow.loc["Free Cash Flow"])
-print(projected_fcff)
-print()
-print()
-print("terminal values")
-print(terminal_growth)
-print(terminal_value)
+
+def main():
+    try:
+        ticker, df_balance_sheet, df_income_statement, df_cash_flow_statement, historical_data, sp500_data, income_statement, info = retrieve_data( ticker_input)
+        beta1, beta_calculated, beta, risk_free_rate, risk_premium, cost_of_equity, market_value_of_debt, market_value_of_equity, WACC, weight_of_debt, weight_of_equity, after_tax_cost_of_debt = metric_calculations(df_balance_sheet, df_income_statement, df_cash_flow_statement, historical_data, sp500_data, ticker)
+        growth, ending_value, revenue_series = revenue_growth_rate(income_statement)
+
+        projected_cogs, combined_nwc, historical_nwc, AR_Days, AR_av_days, projected_revenue_series, projected_ebit, projected_change_in_nwc, projected_capex, projected_depreciation_df, Projected_Current_Assets, Projected_Current_Liabilities, projected_ar, projected_inventory, projected_OCA, projected_cash, projected_AP, projected_current_debt, projected_OCL = projected_figures(df_income_statement, income_statement, growth, ticker)
+        projected_fcff, nopat = calculate_fcff(projected_ebit, projected_change_in_nwc, projected_capex, projected_depreciation_df)
+        last_fcff, terminal_value, free_cash_flow, first_cash_flow, last_cash_flow, terminal_growth  = calculate_terminal_value(projected_fcff, WACC, ticker)
+        enterprise_value = discount(projected_fcff, terminal_value, growth, WACC)
+        intrinsic_price = value(enterprise_value, ticker, info)
 
 
-view_dep = projected_depreciation_df.squeeze()
-view_dep = view_dep.tolist()
+        export_to_excel(ticker_input, projected_revenue_series, projected_ebit, projected_change_in_nwc)
 
+        print("Financial analysis and projections completed successfully!")
+        print(f"Beta: {beta}")
+        print(f"Cost of Equity: {cost_of_equity}")
+        print(f"WACC: {WACC}")
+    except Exception as e:
+        print(f"An error occurred: {e}")
 
-
+if __name__ == "__main__":
+    main()
