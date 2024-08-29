@@ -1,10 +1,8 @@
 import math
 import yfinance as yf
 import pandas as pd
-import pandas_datareader as pdr
 import datetime as dt
 import numpy as np
-import matplotlib.pyplot as plt
 import json
 from fredapi import Fred
 import tkinter as tk
@@ -378,8 +376,7 @@ def value(enterprise_value, ticker, info):
     else:
         print(f"Potential Downside: ${variance}, per share")
 
-    return intrinsic_price
-
+    return intrinsic_price, shares_outstanding, current_price
 
 
 def debug_data(data, name):
@@ -397,7 +394,7 @@ def extract_values(series):
     return series.apply(lambda x: x if isinstance(x, (int, float)) else float(x.split()[0]))
 
 
-def export_to_excel(ticker_input, projected_revenue_series, projected_ebit, projected_change_in_nwc, projected_cogs, projected_capex, projected_depreciation_df, Projected_Current_Assets, Projected_Current_Liabilities, projected_ar, projected_inventory, projected_OCA, projected_cash, projected_AP, projected_current_debt, projected_OCL):
+def export_to_excel(current_price, shares_outstanding, intrinsic_price, projected_fcff, enterprise_value, terminal_value, ticker_input, projected_revenue_series, projected_ebit, projected_change_in_nwc, projected_cogs, projected_capex, projected_depreciation_df, Projected_Current_Assets, Projected_Current_Liabilities, projected_ar, projected_inventory, projected_OCA, projected_cash, projected_AP, projected_current_debt, projected_OCL):
     try:
         # Debug each dataset before combining
         debug_data(projected_revenue_series, 'Projected Revenue Series')
@@ -406,15 +403,7 @@ def export_to_excel(ticker_input, projected_revenue_series, projected_ebit, proj
         debug_data(projected_cogs, 'Projected COGS')
         debug_data(projected_capex, 'Projected CAPEX')
         debug_data(projected_depreciation_df, 'Projected Depreciation')
-        debug_data(Projected_Current_Assets, 'Projected Current Assets')
-        debug_data(Projected_Current_Liabilities, 'Projected Current Liabilities')
-        debug_data(projected_ar, 'Projected Accounts Receivable')
-        debug_data(projected_inventory, 'Projected Inventory')
-        debug_data(projected_OCA, 'Projected Other Current Assets')
-        debug_data(projected_cash, 'Projected Cash')
-        debug_data(projected_AP, 'Projected Accounts Payable')
-        debug_data(projected_current_debt, 'Projected Current Debt')
-        debug_data(projected_OCL, 'Projected Other Current Liabilities')
+        
 
         # Convert all Series/DataFrames to numeric values, excluding non-numeric data
         def to_numeric(series):
@@ -428,19 +417,24 @@ def export_to_excel(ticker_input, projected_revenue_series, projected_ebit, proj
             'Projected COGS': to_numeric(projected_cogs),
             'Projected CAPEX': to_numeric(projected_capex),
             'Projected Depreciation': to_numeric(projected_depreciation_df['Depreciation']),
-            'Projected Current Assets': to_numeric(Projected_Current_Assets),
-            'Projected Current Liabilities': to_numeric(Projected_Current_Liabilities),
-            'Projected Accounts Receivable': to_numeric(projected_ar),
-            'Projected Inventory': to_numeric(projected_inventory),
-            'Projected Other Current Assets': to_numeric(projected_OCA),
-            'Projected Cash': to_numeric(projected_cash),
-            'Projected Accounts Payable': to_numeric(projected_AP),
-            'Projected Current Debt': to_numeric(projected_current_debt),
-            'Projected Other Current Liabilities': to_numeric(projected_OCL)
+            'Free Cash Flow': to_numeric(projected_fcff),
+            
         }
-
-        # Create a single DataFrame
+         # Create a single DataFrame
         combined_data = pd.DataFrame(data_frames).T
+
+        # Create a new DataFrame for terminal value and enterprise value
+        df_values = pd.DataFrame({
+            'Terminal Value': [terminal_value],
+            'Enterprise Value': [enterprise_value],
+            'Shares Outstanding': [shares_outstanding],
+            'Current Price Per Share': [current_price],
+            'Intrinsic Price Per Share': [intrinsic_price],
+            'Intrinsic Upside/Downside': [(intrinsic_price - current_price)]
+        })
+
+
+       
 
         # Get the directory of the current script
         script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -452,14 +446,29 @@ def export_to_excel(ticker_input, projected_revenue_series, projected_ebit, proj
         with pd.ExcelWriter(output_file_path, engine='xlsxwriter') as writer:
             # Write the combined DataFrame to a single sheet
             combined_data.to_excel(writer, sheet_name='Financials', index=True)
+            df_values.to_excel(writer, sheet_name='Valuation', index=False)
 
             # Access the workbook and sheet objects for formatting
             workbook = writer.book
-            worksheet = writer.sheets['Financials']
+            financials_sheet = writer.sheets['Financials']
+            valuation_sheet = writer.sheets['Valuation']
+
+            # Define formats
+            currency_format = workbook.add_format({'num_format': '$#,##0'})
+            percentage_format = workbook.add_format({'num_format': '0.00%'})
+            general_format = workbook.add_format({'num_format': '#,##0'})
 
             # Formatting for the 'Financials' sheet
-            worksheet.set_column('A:A', 30)  # Adjust column width for metrics
-            worksheet.set_column('B:Z', 20)  # Adjust column width for years
+            financials_sheet.set_column('A:A', 30)  # Adjust column width for metrics
+            financials_sheet.set_column('B:Z', 20, general_format)  # Adjust column width for years and apply general format
+
+            # Apply currency format specifically to certain columns (e.g., free cash flow)
+            for col_num, col_name in enumerate(combined_data.columns, 1):  # Start with 1 because Excel columns start at 1
+                financials_sheet.set_column(col_num, col_num, 20, currency_format)
+
+            # Formatting for 'Valuation' sheet
+            valuation_sheet.set_column('A:Z', 30, currency_format)  # Adjust column width for labels
+            valuation_sheet.set_column('C:C', 30, general_format) 
 
         print(f"Data exported successfully to {output_file_path}")
 
@@ -467,9 +476,7 @@ def export_to_excel(ticker_input, projected_revenue_series, projected_ebit, proj
         print(f"ValueError: {ve}")
     except Exception as e:
         print(f"Error exporting to Excel: {e}")
-
-
-
+    return
 
 def main():
     try:
@@ -483,9 +490,9 @@ def main():
         projected_fcff, nopat = calculate_fcff(projected_ebit, projected_change_in_nwc, projected_capex, projected_depreciation_df)
         last_fcff, terminal_value, free_cash_flow, first_cash_flow, last_cash_flow, terminal_growth = calculate_terminal_value(projected_fcff, WACC, ticker)
         enterprise_value = discount(projected_fcff, terminal_value, growth, WACC)
-        intrinsic_price = value(enterprise_value, ticker, info)
+        intrinsic_price, shares_outstanding, current_price = value(enterprise_value, ticker, info)
 
-        export_to_excel(ticker_input, projected_revenue_series, projected_ebit, projected_change_in_nwc, projected_cogs, projected_capex, projected_depreciation_df, Projected_Current_Assets, Projected_Current_Liabilities, projected_ar, projected_inventory, projected_OCA, projected_cash, projected_AP, projected_current_debt, projected_OCL)
+        export_to_excel(current_price, shares_outstanding, intrinsic_price, projected_fcff, enterprise_value, terminal_value, ticker_input, projected_revenue_series, projected_ebit, projected_change_in_nwc, projected_cogs, projected_capex, projected_depreciation_df, Projected_Current_Assets, Projected_Current_Liabilities, projected_ar, projected_inventory, projected_OCA, projected_cash, projected_AP, projected_current_debt, projected_OCL)
 
         print("Financial analysis and projections completed successfully!")
         print(f"Beta: {beta}")
