@@ -19,38 +19,14 @@ pd.set_option('display.max_rows', None)
 pd.set_option('display.float_format', '{:.2f}'.format)
 
 years = 5
-delay_seconds = 5  # Set delay time between requests
 
 
-def get_sp500_tickers():
-    url = "https://stockanalysis.com/list/sp-500-stocks/"
-    response = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'})
-    
-    # Parse the table using lxml
-    tree = html.fromstring(response.content)
-    table_rows = tree.xpath('//*[@id="main-table"]/tbody/tr')
-    
-    # Initialize a list to store each row of data
-    data = []
-    
-    for row in table_rows:
-        # Extract text from each cell in the row
-        row_data = [cell.text_content().strip() for cell in row.xpath('.//td')]
-        data.append(row_data)
-    
-    # Convert the list of lists into a DataFrame
-    sp500_df = pd.DataFrame(data).loc[:,1]
-
-    # For testing, limit to one ticker (e.g., Apple)
-    #sp500_df = ["AAPL"]  # You can remove this line after testing
-    
-    return sp500_df
-
-sp500_df = get_sp500_tickers()
-
+def get_ticker():
+    ticker = input("What Ticker would you like to view?: ")
+    return ticker
+ticker = get_ticker()
 
 def parse(ticker):
-    try:
         print(f"Parsing data for {ticker}...")
         ticker_data = yf.Ticker(ticker) 
         cashflow_statement = ticker_data.cash_flow.iloc[:, 0:4].iloc[:, ::-1]  # Reverse the columns
@@ -59,21 +35,13 @@ def parse(ticker):
         # Convert the historical cash flows to float (if they are not)
         historical_cash_flows = historical_cash_flows.astype(float)
 
-        yahoo_url = f"https://finance.yahoo.com/quote/{ticker}/analysis?p={ticker}"
-        xpath = '//*[@id="nimbus-app"]/section/section/section/article/section[7]/div/table/tbody/tr[5]/td[2]'
-        response = requests.get(yahoo_url, headers={'User-Agent': 'Mozilla/5.0'})
-        growth = float(html.fromstring(response.content).xpath(xpath)[0].text_content().strip().replace('%', '')) / 100
 
         shares_outstanding = ticker_data.info.get("sharesOutstanding")
+         
+        print(f"Ticker: {ticker}, Free Cash Flows: {historical_cash_flows}, Shares Outstanding: {shares_outstanding}")
         
-        print(f"Ticker: {ticker}, Free Cash Flows: {historical_cash_flows}, Growth Rate: {growth}, Shares Outstanding: {shares_outstanding}")
-
-        return historical_cash_flows.iloc[-1], historical_cash_flows, growth, shares_outstanding, historical_cash_flows.iloc[0] if not historical_cash_flows.empty else None
-
-    except Exception as e:
-        logging.error(f"Error parsing data for {ticker}: {e}")
-        return None, None, None, None, None
-
+        return cashflow_statement, historical_cash_flows, shares_outstanding
+cashflow_statement, historical_cash_flows, shares_outstanding = parse(ticker)
 
 def calculate_wacc(ticker, shares_outstanding):
     try:
@@ -138,19 +106,28 @@ def calculate_wacc(ticker, shares_outstanding):
     except Exception as e:
         logging.error(f"Error calculating WACC for {ticker}: {e}")
         return None
-def dcf(ticker, WACC, fcf5, historical_cash_flows, shares_outstanding, growth):
+WACC =  calculate_wacc(ticker, shares_outstanding)
+
+def get_growth():
+    cashflow_growth = input("What growth rate do you expect for Cash Flows?: ")
+    terminal_growth = input("What growth do you expect in the terminal period?: ")
+    return cashflow_growth, terminal_growth
+cashflow_growth, terminal_growth = get_growth()
+
+
+def dcf(ticker, WACC, fcf5, historical_cash_flows, shares_outstanding, terminal_growth, cashflow_growth):
     try:
         print(f"Calculating DCF for {ticker}...")
         forecasted_cash_flows = [float(fcf5)]
         for i in range(1, years):
-            forecasted_cash_flows.append(forecasted_cash_flows[-1] * (1 + growth))
+            forecasted_cash_flows.append(forecasted_cash_flows[-1] * (1 + cashflow_growth))
 
         # Adjust growth rate if it exceeds WACC
-        if growth >= WACC:
+        if terminal_growth >= WACC:
             print(f"Growth rate for {ticker} is greater than or equal to WACC. Adjusting growth rate to WACC.")
             growth = WACC - 0.01  # Reduce growth slightly to avoid division by zero
 
-        terminal_value = (forecasted_cash_flows[-1] * (1 + growth)) / (WACC - growth)
+        terminal_value = (forecasted_cash_flows[-1] * (1 + terminal_growth)) / (WACC - growth)
         
         # Ensure terminal value is not negative
         if terminal_value < 0:
@@ -189,91 +166,3 @@ def evaluate(ticker, intrinsic_value_per_share):
         logging.error(f"Error comparing values for {ticker}: {e}")
         return None
 
-def run(sp500_df):
-    results = []
-
-    # Limit to the first 10 tickers
-    sp500_df = sp500_df.head(10)
-
-    for ticker in sp500_df:
-        print(f"Processing {ticker}...")
-        try:
-            fcf5, historical_cash_flows, growth, shares_outstanding, _ = parse(ticker)
-            if fcf5 and shares_outstanding:
-                WACC = calculate_wacc(ticker, shares_outstanding)
-                if WACC is None:
-                    print(f"Skipping {ticker} due to invalid WACC.")
-                    continue
-                
-                intrinsic_value_per_share, forecasted_cash_flows, terminal_value = dcf(ticker, WACC, fcf5, historical_cash_flows, shares_outstanding, growth)
-                if intrinsic_value_per_share is None:
-                    print(f"Skipping {ticker} due to invalid intrinsic value.")
-                    continue
-                
-                current_shareprice = yf.Ticker(ticker).info.get('previousClose', None)
-                if current_shareprice is None:
-                    print(f"Skipping {ticker} due to missing current share price.")
-                    continue
-
-                potential_return = evaluate(ticker, intrinsic_value_per_share)
-                
-                # Extract individual historical cash flows
-                historical_fcf_list = historical_cash_flows.tolist()
-                historical_fcf_dict = {f"FCF {i+1}": historical_fcf_list[i] for i in range(len(historical_fcf_list))}
-                
-                # Extract individual forecasted cash flows
-                forecasted_fcf_list = forecasted_cash_flows  # This should be a list, not a Series
-                forecasted_fcf_dict = {f"FCF {i+5}": forecasted_fcf_list[i] for i in range(len(forecasted_fcf_list))}
-                
-                results.append({
-                    'Ticker': ticker,
-                    **historical_fcf_dict,
-                    **forecasted_fcf_dict,
-                    'WACC': WACC,
-                    'Growth Rate': growth,
-                    "Terminal Value": terminal_value,
-                    "shares outstanding": shares_outstanding,
-                    'Intrinsic Value per Share': intrinsic_value_per_share,
-                    'Current Share Price': current_shareprice,
-                    'Potential Return': potential_return
-                })
-            else:
-                print(f"Skipping {ticker} due to missing data...")
-
-            time.sleep(delay_seconds)
-
-        except Exception as e:
-            logging.error(f"Error processing {ticker}: {e}")
-
-    return results
-
-
-results = run(sp500_df)
-
-def save_results_to_excel(results):
-    results_df = pd.DataFrame(results)
-    excel_file_path = "/Users/jaredherber/Desktop/Portfolio/sp500.xlsx"
-    
-    if not results_df.empty:  # Ensure results DataFrame is not empty
-        try:
-            # Create a new Excel writer object
-            if os.path.exists(excel_file_path):
-                # If the file exists, append data to a new sheet
-                with pd.ExcelWriter(excel_file_path, engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
-                    results_df.to_excel(writer, sheet_name='Raw Data', index=False)
-                print(f"Results appended to {excel_file_path}")
-            else:
-                # If the file does not exist, create a new one with the data
-                with pd.ExcelWriter(excel_file_path, engine='openpyxl') as writer:
-                    results_df.to_excel(writer, sheet_name='Raw Data', index=False)
-                print(f"File {excel_file_path} created with new data")
-            
-            print("Results saved successfully.")
-            print(results_df)
-        
-        except Exception as e:
-            print(f"An error occurred while saving the file: {e}")
-    else:
-        print("No results to display.")
-
-save_results_to_excel(results)
