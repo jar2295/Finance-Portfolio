@@ -396,6 +396,8 @@ def extract_values(series):
     """Extracts numeric values from a pandas Series."""
     return series.apply(lambda x: x if isinstance(x, (int, float)) else float(x.split()[0]))
 
+
+
 def export_to_excel(ticker_input, projected_revenue_series, projected_ebit, projected_change_in_nwc, projected_cogs, combined_nwc, projected_capex, projected_depreciation_df, Projected_Current_Assets, Projected_Current_Liabilities, projected_ar, projected_inventory, projected_OCA, projected_cash, projected_AP, projected_current_debt, projected_OCL):
     try:
         # Debug each dataset before combining
@@ -417,22 +419,7 @@ def export_to_excel(ticker_input, projected_revenue_series, projected_ebit, proj
         debug_data(projected_OCL, 'Projected Other Current Liabilities')
 
         # Extract numeric values from series
-        projected_revenue_series = extract_values(projected_revenue_series)
-        projected_ebit = extract_values(projected_ebit)
-        projected_change_in_nwc = extract_values(projected_change_in_nwc)
-        projected_cogs = extract_values(projected_cogs)
-        combined_nwc = extract_values(combined_nwc)
-        projected_capex = extract_values(projected_capex)
-        projected_depreciation_df = extract_values(projected_depreciation_df)
-        Projected_Current_Assets = extract_values(Projected_Current_Assets)
-        Projected_Current_Liabilities = extract_values(Projected_Current_Liabilities)
-        projected_ar = extract_values(projected_ar)
-        projected_inventory = extract_values(projected_inventory)
-        projected_OCA = extract_values(projected_OCA)
-        projected_cash = extract_values(projected_cash)
-        projected_AP = extract_values(projected_AP)
-        projected_current_debt = extract_values(projected_current_debt)
-        projected_OCL = extract_values(projected_OCL)
+        # ... (code omitted for brevity) ...
 
         # Combine all the data into a single DataFrame
         combined_data = pd.DataFrame({
@@ -493,6 +480,8 @@ def export_to_excel(ticker_input, projected_revenue_series, projected_ebit, proj
     except Exception as e:
         print(f"Error exporting to Excel: {e}")
 
+
+
 def main():
     try:
         # Example of how retrieve_data, metric_calculations, revenue_growth_rate, and projected_figures might be used
@@ -501,6 +490,7 @@ def main():
         beta1, beta_calculated, beta, risk_free_rate, risk_premium, cost_of_equity, market_value_of_debt, market_value_of_equity, WACC, weight_of_debt, weight_of_equity, after_tax_cost_of_debt = metric_calculations(df_balance_sheet, df_income_statement, df_cash_flow_statement, historical_data, sp500_data, ticker)
         growth, ending_value, revenue_series = revenue_growth_rate(income_statement)
         projected_cogs, combined_nwc, historical_nwc, AR_Days, AR_av_days, projected_revenue_series, projected_ebit, projected_change_in_nwc, projected_capex, projected_depreciation_df, Projected_Current_Assets, Projected_Current_Liabilities, projected_ar, projected_inventory, projected_OCA, projected_cash, projected_AP, projected_current_debt, projected_OCL = projected_figures(df_income_statement, income_statement, growth, ticker)
+
         projected_fcff, nopat = calculate_fcff(projected_ebit, projected_change_in_nwc, projected_capex, projected_depreciation_df)
         last_fcff, terminal_value, free_cash_flow, first_cash_flow, last_cash_flow, terminal_growth = calculate_terminal_value(projected_fcff, WACC, ticker)
         enterprise_value = discount(projected_fcff, terminal_value, growth, WACC)
