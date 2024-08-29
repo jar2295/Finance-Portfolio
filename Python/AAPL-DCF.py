@@ -14,15 +14,12 @@ import openpyxl
 import xlsxwriter
 import os
 
-
 # Display all rows
 pd.set_option('display.max_rows', None)
 pd.set_option('display.float_format', '{:.2f}'.format)
 
 # Global variables
 ticker_input = "aapl"
-
-pd.set_option('display.max_rows', None)
 years = 5
 end_date = dt.datetime.now()
 start_date = end_date - dt.timedelta(days=365 * 10)
@@ -45,7 +42,6 @@ def retrieve_data( ticker_input):
     df_cash_flow_statement = pd.DataFrame(cash_flow_statement)
 
     return ticker, df_balance_sheet, df_income_statement, df_cash_flow_statement, historical_data, sp500_data, income_statement, info
-
 
 def metric_calculations(df_balance_sheet, df_income_statement, df_cash_flow_statement, historical_data, sp500_data, ticker):
 # Extract adjusted closing prices
@@ -385,6 +381,7 @@ def value(enterprise_value, ticker, info):
     return intrinsic_price
 
 
+
 def debug_data(data, name):
     print(f"--- {name} ---")
     if isinstance(data, pd.Series):
@@ -395,44 +392,99 @@ def debug_data(data, name):
         print("Unknown type")
     print("--------------------")
 
-import os
+def extract_values(series):
+    """Extracts numeric values from a pandas Series."""
+    return series.apply(lambda x: x if isinstance(x, (int, float)) else float(x.split()[0]))
 
-def export_to_excel(ticker_input, projected_revenue_series, projected_ebit, projected_change_in_nwc):
+def export_to_excel(ticker_input, projected_revenue_series, projected_ebit, projected_change_in_nwc, projected_cogs, combined_nwc, projected_capex, projected_depreciation_df, Projected_Current_Assets, Projected_Current_Liabilities, projected_ar, projected_inventory, projected_OCA, projected_cash, projected_AP, projected_current_debt, projected_OCL):
     try:
+        # Debug each dataset before combining
         debug_data(projected_revenue_series, 'Projected Revenue Series')
         debug_data(projected_ebit, 'Projected EBIT')
         debug_data(projected_change_in_nwc, 'Projected Change in NWC')
+        debug_data(projected_cogs, 'Projected COGS')
+        debug_data(combined_nwc, 'Combined NWC')
+        debug_data(projected_capex, 'Projected CAPEX')
+        debug_data(projected_depreciation_df, 'Projected Depreciation')
+        debug_data(Projected_Current_Assets, 'Projected Current Assets')
+        debug_data(Projected_Current_Liabilities, 'Projected Current Liabilities')
+        debug_data(projected_ar, 'Projected Accounts Receivable')
+        debug_data(projected_inventory, 'Projected Inventory')
+        debug_data(projected_OCA, 'Projected Other Current Assets')
+        debug_data(projected_cash, 'Projected Cash')
+        debug_data(projected_AP, 'Projected Accounts Payable')
+        debug_data(projected_current_debt, 'Projected Current Debt')
+        debug_data(projected_OCL, 'Projected Other Current Liabilities')
 
-        if projected_revenue_series.empty or projected_ebit.empty or projected_change_in_nwc.empty:
-            raise ValueError("One or more DataFrames/Series to export are empty.")
+        # Extract numeric values from series
+        projected_revenue_series = extract_values(projected_revenue_series)
+        projected_ebit = extract_values(projected_ebit)
+        projected_change_in_nwc = extract_values(projected_change_in_nwc)
+        projected_cogs = extract_values(projected_cogs)
+        combined_nwc = extract_values(combined_nwc)
+        projected_capex = extract_values(projected_capex)
+        projected_depreciation_df = extract_values(projected_depreciation_df)
+        Projected_Current_Assets = extract_values(Projected_Current_Assets)
+        Projected_Current_Liabilities = extract_values(Projected_Current_Liabilities)
+        projected_ar = extract_values(projected_ar)
+        projected_inventory = extract_values(projected_inventory)
+        projected_OCA = extract_values(projected_OCA)
+        projected_cash = extract_values(projected_cash)
+        projected_AP = extract_values(projected_AP)
+        projected_current_debt = extract_values(projected_current_debt)
+        projected_OCL = extract_values(projected_OCL)
+
+        # Combine all the data into a single DataFrame
+        combined_data = pd.DataFrame({
+            'Metric': [
+                'Revenue', 'EBIT', 'Change in NWC', 'COGS', 'NWC', 'CAPEX', 'Depreciation',
+                'Current Assets', 'Current Liabilities', 'Accounts Receivable', 'Inventory',
+                'Other Current Assets', 'Cash', 'Accounts Payable', 'Current Debt', 'Other Current Liabilities'
+            ]
+        })
+
+        # Define the years to be included
+        years = ['2024', '2025', '2026', '2027']  # Adjust as needed
+
+        # Populate the DataFrame with data for each year
+        for year in years:
+            combined_data[year] = [
+                projected_revenue_series.get(year, 'N/A'),
+                projected_ebit.get(year, 'N/A'),
+                projected_change_in_nwc.get(year, 'N/A'),
+                projected_cogs.get(year, 'N/A'),
+                combined_nwc.get(year, 'N/A'),
+                projected_capex.get(year, 'N/A'),
+                projected_depreciation_df.get(year, 'N/A'),
+                Projected_Current_Assets.get(year, 'N/A'),
+                Projected_Current_Liabilities.get(year, 'N/A'),
+                projected_ar.get(year, 'N/A'),
+                projected_inventory.get(year, 'N/A'),
+                projected_OCA.get(year, 'N/A'),
+                projected_cash.get(year, 'N/A'),
+                projected_AP.get(year, 'N/A'),
+                projected_current_debt.get(year, 'N/A'),
+                projected_OCL.get(year, 'N/A')
+            ]
 
         # Get the directory of the current script
         script_dir = os.path.dirname(os.path.abspath(__file__))
-        
+
         # Define the path for the output file
         output_file_path = os.path.join(script_dir, f'{ticker_input}_output.xlsx')
-        
+
         # Create an ExcelWriter object using XlsxWriter
         with pd.ExcelWriter(output_file_path, engine='xlsxwriter') as writer:
-            # Export each DataFrame/Series to a different sheet
-            projected_revenue_series.to_excel(writer, sheet_name='Projected Revenue')
-            projected_ebit.to_excel(writer, sheet_name='Projected EBIT')
-            projected_change_in_nwc.to_excel(writer, sheet_name='Projected NWC')
+            # Write the combined DataFrame to a single sheet
+            combined_data.to_excel(writer, sheet_name='Financials', index=False)
 
             # Access the workbook and sheet objects for formatting
             workbook = writer.book
+            worksheet = writer.sheets['Financials']
 
-            # Projected Revenue formatting
-            worksheet = writer.sheets['Projected Revenue']
-            worksheet.set_column('A:A', 25)
-
-            # Projected EBIT formatting
-            worksheet = writer.sheets['Projected EBIT']
-            worksheet.set_column('A:A', 25)
-
-            # Projected NWC formatting
-            worksheet = writer.sheets['Projected NWC']
-            worksheet.set_column('A:A', 25)
+            # Formatting for the 'Financials' sheet
+            worksheet.set_column('A:A', 30)  # Adjust column width for metrics
+            worksheet.set_column('B:Z', 15)  # Adjust column width for years
 
         print(f"Data exported successfully to {output_file_path}")
 
@@ -441,27 +493,26 @@ def export_to_excel(ticker_input, projected_revenue_series, projected_ebit, proj
     except Exception as e:
         print(f"Error exporting to Excel: {e}")
 
-
-
 def main():
     try:
-        ticker, df_balance_sheet, df_income_statement, df_cash_flow_statement, historical_data, sp500_data, income_statement, info = retrieve_data( ticker_input)
+        # Example of how retrieve_data, metric_calculations, revenue_growth_rate, and projected_figures might be used
+
+        ticker, df_balance_sheet, df_income_statement, df_cash_flow_statement, historical_data, sp500_data, income_statement, info = retrieve_data(ticker_input)
         beta1, beta_calculated, beta, risk_free_rate, risk_premium, cost_of_equity, market_value_of_debt, market_value_of_equity, WACC, weight_of_debt, weight_of_equity, after_tax_cost_of_debt = metric_calculations(df_balance_sheet, df_income_statement, df_cash_flow_statement, historical_data, sp500_data, ticker)
         growth, ending_value, revenue_series = revenue_growth_rate(income_statement)
-
         projected_cogs, combined_nwc, historical_nwc, AR_Days, AR_av_days, projected_revenue_series, projected_ebit, projected_change_in_nwc, projected_capex, projected_depreciation_df, Projected_Current_Assets, Projected_Current_Liabilities, projected_ar, projected_inventory, projected_OCA, projected_cash, projected_AP, projected_current_debt, projected_OCL = projected_figures(df_income_statement, income_statement, growth, ticker)
         projected_fcff, nopat = calculate_fcff(projected_ebit, projected_change_in_nwc, projected_capex, projected_depreciation_df)
-        last_fcff, terminal_value, free_cash_flow, first_cash_flow, last_cash_flow, terminal_growth  = calculate_terminal_value(projected_fcff, WACC, ticker)
+        last_fcff, terminal_value, free_cash_flow, first_cash_flow, last_cash_flow, terminal_growth = calculate_terminal_value(projected_fcff, WACC, ticker)
         enterprise_value = discount(projected_fcff, terminal_value, growth, WACC)
         intrinsic_price = value(enterprise_value, ticker, info)
 
-
-        export_to_excel(ticker_input, projected_revenue_series, projected_ebit, projected_change_in_nwc)
+        export_to_excel(ticker_input, projected_revenue_series, projected_ebit, projected_change_in_nwc, projected_cogs, combined_nwc, projected_capex, projected_depreciation_df, Projected_Current_Assets, Projected_Current_Liabilities, projected_ar, projected_inventory, projected_OCA, projected_cash, projected_AP, projected_current_debt, projected_OCL)
 
         print("Financial analysis and projections completed successfully!")
         print(f"Beta: {beta}")
         print(f"Cost of Equity: {cost_of_equity}")
         print(f"WACC: {WACC}")
+
     except Exception as e:
         print(f"An error occurred: {e}")
 
