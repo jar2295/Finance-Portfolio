@@ -1,0 +1,2 @@
+2024-08-29 20:37:58,550 - ERROR - 401 Client Error: Unauthorized for url: https://query2.finance.yahoo.com/v10/finance/quoteSummary/AAPL?modules=financialData%2CquoteType%2CdefaultKeyStatistics%2CassetProfile%2CsummaryDetail&corsDomain=finance.yahoo.com&formatted=false&symbol=AAPL&crumb=%7B%22finance%22%3A%7B%22result%22%3Anull%2C%22error%22%3A%7B%22code%22%3A%22Unauthorized%22%2C%22description%22%3A%22Invalid+Cookie%22%7D%7D%7D
+2024-08-29 20:37:59,482 - ERROR - Error calculating WACC for aapl: unsupported operand type(s) for *: 'float' and 'NoneType'
