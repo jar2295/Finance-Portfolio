@@ -7,6 +7,7 @@ import requests
 import logging
 import time
 import threading
+from tkinter import filedialog
 
 class PercentageSlidersApp:
     def __init__(self, root):
@@ -39,6 +40,11 @@ class PercentageSlidersApp:
         # Progress bar
         self.progress = ttk.Progressbar(root, orient="horizontal", length=300, mode="determinate")
         self.progress.grid(row=5, column=0, columnspan=3, pady=10)
+
+        # Download Excel button
+        self.download_button = ttk.Button(root, text="Download Results", command=self.save_to_excel)
+        self.download_button.grid(row=4, column=2, pady=10)
+
 
     def create_slider_and_input(self, label, var, row):
         ttk.Label(self.root, text=label).grid(row=row, column=0, padx=5, pady=5, sticky="w")
@@ -148,7 +154,7 @@ class PercentageSlidersApp:
     def calculate(self):
         results = []
         sp500_df = self.get_sp500_tickers()
-        sp500_df = sp500_df 
+        sp500_df = sp500_df
 
         self.progress['maximum'] = len(sp500_df)
         self.progress['value'] = 0
@@ -171,26 +177,26 @@ class PercentageSlidersApp:
             time.sleep(1)  # Short delay between requests to avoid rate limits
 
         if results:
-            results_df = pd.DataFrame(results)
-            results_df['P/E Rank'] = results_df['P/E Ratio'].rank(ascending=True)
-            results_df['P/B Rank'] = results_df['P/B Ratio'].rank(ascending=True)
-            results_df['D/E Rank'] = results_df['Debt to Equity'].rank(ascending=True)
-            results_df['PEG Rank'] = results_df['PEG Ratio'].rank(ascending=True)
+            self.results_df = pd.DataFrame(results)
+            self.results_df['P/E Rank'] = self.results_df['P/E Ratio'].rank(ascending=True)
+            self.results_df['P/B Rank'] = self.results_df['P/B Ratio'].rank(ascending=True)
+            self.results_df['D/E Rank'] = self.results_df['Debt to Equity'].rank(ascending=True)
+            self.results_df['PEG Rank'] = self.results_df['PEG Ratio'].rank(ascending=True)
 
             weight_pe = self.slider1_val.get()
             weight_pb = self.slider2_val.get()
             weight_de = self.slider3_val.get()
             weight_peg = self.slider4_val.get()
 
-            results_df['Composite Score'] = (
-                (results_df['P/E Rank'] * weight_pe) +
-                (results_df['P/B Rank'] * weight_pb) +
-                (results_df['D/E Rank'] * weight_de) +
-                (results_df['PEG Rank'] * weight_peg)
+            self.results_df['Composite Score'] = (
+                (self.results_df['P/E Rank'] * weight_pe) +
+                (self.results_df['P/B Rank'] * weight_pb) +
+                (self.results_df['D/E Rank'] * weight_de) +
+                (self.results_df['PEG Rank'] * weight_peg)
             )
 
-            best_score = results_df.loc[results_df['Composite Score'].idxmin()]
-            worst_score = results_df.loc[results_df['Composite Score'].idxmax()]
+            best_score = self.results_df.loc[self.results_df['Composite Score'].idxmin()]
+            worst_score = self.results_df.loc[self.results_df['Composite Score'].idxmax()]
 
             output_text = f"Best Composite Score:\nTicker: {best_score['Ticker']}\n" \
                         f"P/E Ratio: {best_score['P/E Ratio']:.2f}\n" \
@@ -203,14 +209,34 @@ class PercentageSlidersApp:
                         f"Debt to Equity: {worst_score['Debt to Equity']:.2f}\n" \
                         f"PEG Ratio: {worst_score['PEG Ratio']:.2f}"
         else:
+            self.results_df = pd.DataFrame()
             output_text = "No valid financial data found for the selected tickers."
 
         self.output_label.config(text=output_text)
 
 
+
     def start_calculation(self):
         # Run the calculation in a separate thread to keep the UI responsive
         threading.Thread(target=self.calculate).start()
+
+
+    def save_to_excel(self):
+        if self.results_df is not None and not self.results_df.empty:
+            # Open a file dialog to get the save path from the user
+            file_path = filedialog.asksaveasfilename(
+                defaultextension=".xlsx",
+                filetypes=[("Excel files", "*.xlsx")],
+                title="Save Results As"
+            )
+            if file_path:
+                # Save the DataFrame to the selected file path
+                self.results_df.to_excel(file_path, index=False)
+                logging.info(f"Results saved to {file_path}")
+        else:
+            logging.error("No results to save")
+            tk.messagebox.showerror("Error", "No results to save. Please run the calculation first.")
+
 
 if __name__ == "__main__":
     root = tk.Tk()
