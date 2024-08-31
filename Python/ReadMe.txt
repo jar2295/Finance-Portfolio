@@ -18,5 +18,6 @@ The intrinsic value per share is compared to the current stock price to assess p
 The results, including detailed projections and valuations, are exported to an Excel file for further analysis.
 
 ---------------------------
-AAPL_DCF.py
+user_input.py
 ---------------------------
+This python script builds off the apple DCF script, but allows for a user input. It serves as a basic jumping off point for further financial analysis.
