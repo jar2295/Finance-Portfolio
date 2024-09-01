@@ -21,3 +21,8 @@ The results, including detailed projections and valuations, are exported to an E
 user_input.py
 ---------------------------
 This python script builds off the apple DCF script, but allows for a user input. It serves as a basic jumping off point for further financial analysis.
+
+---------------------------
+Portfolio Optimisation.py
+---------------------------
+This code performs portfolio optimisation using historical stock data for some place holder companies. It downloads the adjusted closing prices of these stocks over the past five years and calculates daily log returns. The code then computes the covariance matrix of these returns, which is used to assess the risk (volatility) of the portfolio. Using the Sharpe ratio—a measure of risk-adjusted return—the code optimises the portfolio weights to maximise the Sharpe ratio while considering constraints (no short selling and no more than 50% allocation to any single stock). The optimal portfolio's expected annual return, volatility, and Sharpe ratio are then calculated. Finally, the optimal weights for each stock in the portfolio are displayed in a bar chart to visualise the portfolio allocation.
