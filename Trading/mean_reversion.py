@@ -7,10 +7,11 @@ from tqdm import tqdm
 
 class strategy:
 
-    def __init__(self):
+    def __init__(self, rsi_window=10):
         self.n_stocks = 50
         self.fibonacci_sequence = [5, 8, 13]
-        self.rsi_window = 10  # Add RSI window parameter
+        self.rsi_window = rsi_window
+        self.rsi_oversold = 30
 
     def get_daily_losers(self):
         # Yahoo Finance daily losers URL
@@ -44,9 +45,7 @@ class strategy:
 
         for symbol in tqdm(
             tickers,
-            desc="• Grabbing technical metrics for "
-            + str(len(tickers))
-            + " tickers",
+            desc="• Grabbing technical metrics for " + str(len(tickers)) + " tickers",
         ):
             try:
                 Ticker = yf.Ticker(symbol)
@@ -62,6 +61,7 @@ class strategy:
                 # Get the most recent 15 days of data
                 df_indicators_temp = Hist.iloc[-15:].reset_index(drop=True)
                 df_indicators_temp.insert(0, "Symbol", Ticker.ticker)
+                df_indicators_temp["trend"] = "Neutral"  # Initialize trend column
                 df_indicators.append(df_indicators_temp)
             
             except KeyError as e:
@@ -70,27 +70,21 @@ class strategy:
 
         # Remove empty dataframes and concatenate
         df_indicators = [x for x in df_indicators if not x.empty]
-        if df_indicators:
-            df_indicators = pd.concat(df_indicators)
-            print(df_indicators)  # Print the combined dataframe
-        else:
-            print("No valid indicators found.")
+        df_indicators = pd.concat(df_indicators)
 
         # Determine the trend based on SMA values
         if not df_indicators.empty:
-            latest_values = df_indicators.iloc[-1]  # Get the most recent row of indicators
-            if (latest_values['ma5'] > latest_values['ma8']) and (latest_values['ma8'] > latest_values['ma13']):
-                trend = "Bullish"
-            elif (latest_values['ma5'] < latest_values['ma8']) and (latest_values['ma8'] < latest_values['ma13']):
-                trend = "Bearish"
-            else:
-                trend = "Neutral"
-            print(f"Trend for {latest_values['Symbol']}: {trend}")
+            # Use element-wise logical operations and proper pandas methods
+            buy_criteria = (
+                (df_indicators['ma5'] > df_indicators['ma8']) &
+                (df_indicators['ma8'] > df_indicators['ma13'])
+            ) | (df_indicators['rsi' + str(self.rsi_window)] < self.rsi_oversold)
+            
+            # Filter the DataFrame
+            buy_filtered_df = df_indicators[buy_criteria]
 
-if __name__ == "__main__":
-    strat = strategy()  # Set RSI window here
-    tickers = strat.get_daily_losers()  # Get daily losers
-    print("Tickers:", tickers)
+            # Create a list of tickers to trade
+            self.buy_tickers = list(buy_filtered_df["Symbol"])
 
-    # Get technical metrics for tickers
-    strat.get_ticker_info()
+            return buy_filtered_df  # Return DataFrame with indicators and trends
+
