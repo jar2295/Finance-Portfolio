@@ -7,20 +7,19 @@ import numpy as np
 import matplotlib.pyplot as plt
 from new_alpaca_framework import Alpaca_trader
 import time
-import threading
 
 class Strategy: 
     def __init__(self) -> None:
         self.fibonacci = [5, 8, 13]
         self.std_dev_multiplier = 1
-        self.bb_window = 5
+        self.bb_window = 10
         self.rsi_window = 14
-        self.rsi_upper = 50
-        self.rsi_lower = 50
+        self.rsi_upper = 70
+        self.rsi_lower = 30
         self.data = {}
         self.alpaca_trader = Alpaca_trader()
         self.ticker = ['AAPL', 'GOOGL', 'MSFT']  # Example tickers
-        self.running = False  # Control flag for the loop
+        self.running = True  # Control flag for the loop
 
         
 
@@ -79,39 +78,16 @@ class Strategy:
                 continue
 
     def run(self):
-        while True:
-            if self.running:
-                self.calculate_indicators()
-            time.sleep(60)  # Wait for 1 minute before fetching new data
+        self.alpaca_trader.get_portfolio()
 
-    def start(self):
-        if not self.running:
-            self.running = True
-            print("Strategy started")
+        while self.running:
+            self.calculate_indicators()
+            time.sleep(10)  # Wait for 1 minute before fetching new data
 
     def stop(self):
-        if self.running:
-            self.running = False
-            print("Strategy stopped")
-
-    def handle_commands(self):
-        while True:
-            command = input("Enter command (start/stop/exit): ").strip().lower()
-            if command == "start":
-                self.start()
-            elif command == "stop":
-                self.stop()
-            elif command == "exit":
-                self.stop()
-                break
-            else:
-                print("Unknown command")
-
-
+        self.running = False
+        print("Stopping strategy...")
 
 if __name__ == "__main__":
     strategy = Strategy()  # Initialize the strategy
-
-    # Start the command handler in a separate thread
-    command_thread = threading.Thread(target=strategy.handle_commands, daemon=True)
-    command_thread.start()
+    strategy.run()  # Start continuous data fetching and trading
