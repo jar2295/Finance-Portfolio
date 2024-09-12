@@ -14,15 +14,10 @@ from requests_html import HTMLSession
 from datetime import datetime
 import logging
 
-# Import strategies
-from mean_reversion import strategy
-from buyHold import BuyHoldStrategy
 
 class Alpaca_trader:
     def __init__(self) -> None:
-        self.strategy = BuyHoldStrategy()
         print(f"Initializing Alpaca API with endpoint:...")
-
         API_KEY = "PKDGHHFCJZROI1ECN5O4"
         API_SECRET = "VB5wbJjCJwmDscz0QnadNz3mTw19lgRhi2XRysis"
         BASE_URL = "https://paper-api.alpaca.markets"  # Or use the live URL if not in paper trading mode
@@ -76,39 +71,40 @@ class Alpaca_trader:
 
         return False
 
+    @staticmethod
+    def submit_buy_order(self, ticker: str, qty: int):
 
-    def submit_buy_order(self, symbol: str, qty: int):
-
-        buy_tickers = self.strategy.get_buy_tickers() 
         if self.is_market_open():
              print("Market is open!")
-             eligible_symbols = buy_tickers
+             eligible_symbols = ticker
         else:
-            eligible_symbols = [symbol for symbol in buy_tickers if '-USD' in symbol]
+            eligible_symbols = []
         
-
+        purchases = []
         for symbol in eligible_symbols:
             try:
                 buy_order = self.api.submit_order(
                     symbol=symbol,       # Stock symbol
-                    qty=qty,             # Number of shares
+                    qty= '1',             # Number of shares
                     side='buy',          # 'buy' or 'sell'
                     type='market',       # Order type
                     time_in_force='gtc'  # Good 'til canceled
                 )
                 print(f"Buy order submitted: {buy_order}")
+                purchases.append([symbol, round(qty)])
+                logging.info(f"Purchased: {symbol} at {datetime.now()}")
             except Exception as e:
                 print(f"Error submitting order: {e}")
 
 
-    def submit_sell_order(self, symbol: str, qty: int):
+    def submit_sell_order(self, ticker: str, qty: int):
         positions = self.get_portfolio()
         positions = self.positions['asset'].tolist()  #
 
-        sell_tickers = self.strategy.get_sell_tickers() 
+
         if self.is_market_open():
              print("Market is open!")
-             eligible_symbols = [symbol for symbol in sell_tickers if symbol in positions]
+             eligible_symbols = ticker
         else:
             eligible_symbols = [] 
         
@@ -127,28 +123,4 @@ class Alpaca_trader:
             except Exception as e:
                 print(f"Error submitting order: {e}")
             return
-
-
-if __name__ == "__main__":
-    # Initialize the strategy with a ticker (e.g., MSFT)
-    strategy = BuyHoldStrategy()
-    tickers_to_buy = strategy.get_buy_tickers()
-    tickers_to_sell = strategy.get_sell_tickers()
-
-    # Initialize the Alpaca trader
-    trader = Alpaca_trader()
-    # Optionally, you can check the portfolio after placing the order
-    trader.get_portfolio()
-
-    # Loop through the tickers and place buy orders
-    for ticker in tickers_to_buy:
-        # Here we assume you want to buy 1 share; adjust 'qty' as needed
-        trader.submit_buy_order(symbol=ticker, qty=1)
-    
-    for ticker in tickers_to_sell:
-        trader.submit_sell_order(symbol=ticker, qty=1)
-    
-
-    
-    
 

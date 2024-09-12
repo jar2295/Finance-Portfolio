@@ -1,35 +1,31 @@
 import pandas as pd
-
 import yfinance as yf
 from ta.momentum import RSIIndicator
 from ta.trend import sma_indicator
 from tqdm import tqdm
-import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-
+from new_alpaca_framework import Alpaca_trader
+import time
+import threading
 
 class Strategy: 
     def __init__(self) -> None:
-        self.fibonacci = [5, 8, 13, 21, 34]
-        self.std_dev_multiplier = 1.618  # Use numerical value instead of string
-        self.bb_window = 10
-        self.rsi_period = 14   # Set default RSI period
-        self.rsi_upper = 70    # Set default RSI upper threshold
-        self.rsi_lower = 30    # Set default RSI lower threshold
-        self.rsi_window = 10
-        self.data = {}         # To store data for each ticker
+        self.fibonacci = [5, 8, 13]
+        self.std_dev_multiplier = 1
+        self.bb_window = 5
+        self.rsi_window = 14
+        self.rsi_upper = 50
+        self.rsi_lower = 50
+        self.data = {}
+        self.alpaca_trader = Alpaca_trader()
+        self.ticker = ['AAPL', 'GOOGL', 'MSFT']  # Example tickers
+        self.running = False  # Control flag for the loop
+
         
-    def get_potential_tickers(self):
-        self.tickers = ["aapl"]
-        return self.tickers
 
     def get_ticker_info(self):
-
-        for symbol in tqdm(
-            self.tickers,
-            desc="• Grabbing technical metrics for " + str(len(self.tickers)) + " tickers",
-        ):    
+        for symbol in tqdm(self.ticker, desc="• Grabbing technical metrics for tickers"):
             try:
                 Ticker = yf.Ticker(symbol)
                 data = Ticker.history(period="1d", interval='1m')
@@ -38,70 +34,84 @@ class Strategy:
                     print(f"No data found for {symbol}")
                     continue
 
+                # Compute Fibonacci SMAs
+                sma_columns = []
                 for n in self.fibonacci:
-                    data["SMA"] = data['Close'].rolling(window=n).mean()
+                    column_name = f'SMA{n}'
+                    data[column_name] = data['Close'].rolling(window=n).mean()
+                    sma_columns.append(column_name)
 
-                rsi= RSIIndicator(close=data["Close"], window=self.rsi_window).rsi()
+                # Compute average of Fibonacci SMAs
+                data['SMA_BB'] = data[sma_columns].mean(axis=1)
+
+                # Compute RSI
+                rsi = RSIIndicator(close=data["Close"], window=self.rsi_window).rsi()
                 data['RSI'] = rsi
 
-                data['SMA_BB'] = data['Close'].rolling(window= self.bb_window).mean()
+                # Compute Bollinger Bands
                 data['Rolling Std Dev'] = data['Close'].rolling(window=self.bb_window).std()
-                data['Upper Band'] = data["SMA"] + (data['Rolling Std Dev'] * self.std_dev_multiplier)
-                data['Lower Band'] = data['SMA'] - (data['Rolling Std Dev'] * self.std_dev_multiplier)
+                data['Upper Band'] = data['SMA_BB'] + (data['Rolling Std Dev'] * self.std_dev_multiplier)
+                data['Lower Band'] = data['SMA_BB'] - (data['Rolling Std Dev'] * self.std_dev_multiplier)
 
                 self.data[symbol] = data.dropna()
 
-                return self.data
-            
             except KeyError as e:
                 print(f"KeyError for {symbol}: {e}")
                 continue
 
 
+    def calculate_indicators(self):
+        self.get_ticker_info()
 
-
-    def plot(self):
         for symbol, data in self.data.items():
-            plt.figure(figsize=(14, 7))
-            
-            # Debug: Print columns and sample data for plotting
-            print(f"Columns for plotting {symbol}: {data.columns}")
-            print(f"Sample data for plotting {symbol}:")
-            print(data.head())
-            
-            # Plot Close Price and SMAs
-            if 'Close' in data.columns:
-                plt.plot(data.index, data['Close'], label='Close Price', color='black')
-            else:
-                print(f"'Close' column not found in data for {symbol}")
-            
-            for n in self.fibonacci:
-                if f'SMA{n}' in data.columns:
-                    plt.plot(data.index, data[f'SMA{n}'], label=f'SMA{n}')
+            try:
+                if (data['RSI'].iloc[-1] > self.rsi_upper) and (data["Close"].iloc[-1] < data['Upper Band'].iloc[-1]):
+                    self.alpaca_trader.submit_sell_order(symbol, qty=1)  # Use instance method
+
+                elif (data['RSI'].iloc[-1] < self.rsi_lower) and (data["Close"].iloc[-1] < data['Lower Band'].iloc[-1]):
+                    self.alpaca_trader.submit_buy_order(symbol, qty=1)  # Use instance method
+
                 else:
-                    print(f"SMA{n} column not found in data for {symbol}")
-                    
-            # Plot Bollinger Bands
-            if 'Upper Band' in data.columns and 'Lower Band' in data.columns:
-                plt.plot(data.index, data['Upper Band'], label='Upper Band', color='red', linestyle='--')
-                plt.plot(data.index, data['Lower Band'], label='Lower Band', color='red', linestyle='--')
-                plt.plot(data.index, data['SMA_BB'], label='Middle Band', color='blue', linestyle='--')
+                    print(f"No action for {symbol}")
+
+            except Exception as e:
+                print(f"Error calculating indicators for {symbol}: {e}")
+                continue
+
+    def run(self):
+        while True:
+            if self.running:
+                self.calculate_indicators()
+            time.sleep(60)  # Wait for 1 minute before fetching new data
+
+    def start(self):
+        if not self.running:
+            self.running = True
+            print("Strategy started")
+
+    def stop(self):
+        if self.running:
+            self.running = False
+            print("Strategy stopped")
+
+    def handle_commands(self):
+        while True:
+            command = input("Enter command (start/stop/exit): ").strip().lower()
+            if command == "start":
+                self.start()
+            elif command == "stop":
+                self.stop()
+            elif command == "exit":
+                self.stop()
+                break
             else:
-                print(f"Bollinger Bands columns not found in data for {symbol}")
-            
-            plt.title(f'{symbol} - Bollinger Bands & SMAs')
-            plt.xlabel('Date')
-            plt.ylabel('Price')
-            plt.legend()
-            plt.grid()
-            plt.show()
+                print("Unknown command")
 
-        
 
-   
+
 if __name__ == "__main__":
     strategy = Strategy()  # Initialize the strategy
-    strategy.get_potential_tickers()  # Get potential tickers
-    strategy.get_ticker_info()  # Fetch data and compute indicators
-    strategy.plot()
 
+    # Start the command handler in a separate thread
+    command_thread = threading.Thread(target=strategy.handle_commands, daemon=True)
+    command_thread.start()
