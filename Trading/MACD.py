@@ -18,10 +18,8 @@ class Strategy:
         self.rsi_lower = 30
         self.data = {}
         self.alpaca_trader = Alpaca_trader()
-        self.ticker = ['AAPL', 'GOOGL', 'MSFT']  # Example tickers
+        self.ticker = ['spy']  # Example tickers
         self.running = True  # Control flag for the loop
-
-        
 
     def get_ticker_info(self):
         for symbol in tqdm(self.ticker, desc="• Grabbing technical metrics for tickers"):
