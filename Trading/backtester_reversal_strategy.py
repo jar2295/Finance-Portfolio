@@ -1,17 +1,18 @@
+import os
 import pandas as pd
 import yfinance as yf
 from ta.momentum import RSIIndicator
 from ta.trend import sma_indicator
 from tqdm import tqdm
-import numpy as np
 import matplotlib.pyplot as plt
+import time
 
 # Configuration Parameters
-TICKERS = ['SPY']  # List of tickers to backtest
-START_DATE = '2024-01-01'  # Start date for historical data
-END_DATE = '2024-09-01'  # End date for historical data
+TICKERS = ['spy']  # List of tickers to backtest
+START_DATE = '2024-09-10'  # Start date for historical data
+END_DATE = '2024-09-12'  # End date for historical data
 INTERVAL = '1m'  # Data interval for day trading ('1m', '5m', '15m', '30m', '60m', '1d')
-INITIAL_BALANCE = 1000  # Initial balance for backtesting
+INITIAL_BALANCE = 500  # Initial balance for backtesting
 
 # Indicators Parameters
 FIBONACCI_SMA_PERIODS = [5, 8, 13]  # Fibonacci periods for SMAs
@@ -28,22 +29,29 @@ class Backtester:
         self.initial_balance = initial_balance
         self.data = {}
         self.interval = interval
+        self.data_directory = 'data'
         
     def fetch_data(self):
-        for symbol in tqdm(self.tickers, desc="Fetching historical data"):
-            Ticker = yf.Ticker(symbol)
-            data = Ticker.history(start=self.start_date, end=self.end_date, interval='1d')  # Use daily interval
-            if data.empty:
-                print(f"No data available for {symbol} during the specified period.")
-            else:
+        for symbol in tqdm(TICKERS, desc="• Grabbing technical metrics for tickers"):
+            try:
+                Ticker = yf.Ticker(symbol)
+                data = Ticker.history(period="5d", interval=INTERVAL)
                 data = data.sort_index()
-                print(f"Data for {symbol}:")
-                print(data.head())  # Print first few rows to check data
-                self.data[symbol] = data
+                if data.empty:
+                    print(f"No data found for {symbol}")
+                    continue
 
+            except KeyError as e:
+                print(f"KeyError for {symbol}: {e}")
+                continue
 
+            self.data[symbol] = data
+    
     def compute_indicators(self):
         for symbol, data in self.data.items():
+            if data.empty:
+                continue
+            
             # Compute Fibonacci SMAs
             sma_columns = []
             for n in FIBONACCI_SMA_PERIODS:
@@ -63,7 +71,7 @@ class Backtester:
             data['Lower Band'] = data['SMA_BB'] - (data['Rolling Std Dev'] * 1)
             
             self.data[symbol] = data.dropna()
-    
+
     def backtest(self):
         results = {}
         for symbol, data in self.data.items():
