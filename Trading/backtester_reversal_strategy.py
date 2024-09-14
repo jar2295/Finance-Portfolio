@@ -8,24 +8,21 @@ import matplotlib.pyplot as plt
 import time
 
 # Configuration Parameters
-TICKERS = ['spy']  # List of tickers to backtest
-START_DATE = '2024-09-10'  # Start date for historical data
-END_DATE = '2024-09-12'  # End date for historical data
+TICKERS = ['SPXL']  # List of tickers to backtest
 INTERVAL = '1m'  # Data interval for day trading ('1m', '5m', '15m', '30m', '60m', '1d')
+PERIOD = "1d"
 INITIAL_BALANCE = 500  # Initial balance for backtesting
 
 # Indicators Parameters
 FIBONACCI_SMA_PERIODS = [5, 8, 13]  # Fibonacci periods for SMAs
-RSI_WINDOW = 8  # Window for RSI calculation
+RSI_WINDOW = 10  # Window for RSI calculation
 RSI_BUY_THRESHOLD = 30  # RSI threshold for buying
 RSI_SELL_THRESHOLD = 70  # RSI threshold for selling
 BB_WINDOW = 8  # Window for Bollinger Bands
 
 class Backtester:
-    def __init__(self, tickers, start_date, end_date, initial_balance, interval):
+    def __init__(self, tickers, initial_balance, interval):
         self.tickers = tickers
-        self.start_date = start_date
-        self.end_date = end_date
         self.initial_balance = initial_balance
         self.data = {}
         self.interval = interval
@@ -35,7 +32,7 @@ class Backtester:
         for symbol in tqdm(TICKERS, desc="• Grabbing technical metrics for tickers"):
             try:
                 Ticker = yf.Ticker(symbol)
-                data = Ticker.history(period="5d", interval=INTERVAL)
+                data = Ticker.history(period=PERIOD, interval=INTERVAL)
                 data = data.sort_index()
                 if data.empty:
                     print(f"No data found for {symbol}")
@@ -80,35 +77,23 @@ class Backtester:
                 continue
             
             data['Position'] = 0
-            data['Trade'] = 0  # +1 for buy, -1 for sell
+            data['Trade'] = 0  # +1 for buy
             balance = self.initial_balance
-            holdings = 0
+
             data['Account Value'] = balance
             
             # Simulate trading
             for i in range(1, len(data)):
-                if data['RSI'].iloc[i] < RSI_BUY_THRESHOLD and balance > 0:  # Buy signal
-                    holdings = balance / data['Close'].iloc[i]
-                    balance = 0
+                if data['RSI'].iloc[i] < RSI_BUY_THRESHOLD and data['Close'].iloc[i] < data['Lower Band'].iloc[i]:  # Buy signal
+
+
                     data.at[data.index[i], 'Trade'] = 1
-                elif data['RSI'].iloc[i] > RSI_SELL_THRESHOLD and holdings > 0:  # Sell signal
-                    balance = holdings * data['Close'].iloc[i]
-                    holdings = 0
+                elif data['RSI'].iloc[i] > RSI_SELL_THRESHOLD and data['Close'].iloc[i] > data['Upper Band'].iloc[i]:  # Sell signal
+
+
                     data.at[data.index[i], 'Trade'] = -1
                 
-                # Update account value
-                data.at[data.index[i], 'Account Value'] = balance + (holdings * data['Close'].iloc[i])
             
-            # Final profit
-            if not data.empty:
-                final_value = balance + (holdings * data['Close'].iloc[-1])
-                profit = final_value - self.initial_balance
-                
-                # Print results
-                print(f"{symbol} Final Account Value: ${final_value:.2f}")
-                print(f"{symbol} Total Profit: ${profit:.2f}")
-            else:
-                print(f"Error: Data is empty for {symbol}.")
 
             # Store results for plotting
             results[symbol] = data
@@ -117,22 +102,40 @@ class Backtester:
 
     def plot_results(self, results):
         for symbol, data in results.items():
-            plt.figure(figsize=(12, 6))
+            # Plot price, buy/sell signals, and Bollinger Bands
+            plt.figure(figsize=(14, 10))
+            
+            # Price and Bands
+            plt.subplot(2, 1, 1)
             plt.plot(data.index, data['Close'], label='Price', color='blue')
+            plt.plot(data.index, data['Upper Band'], label='Upper Band', color='orange', linestyle='--')
+            plt.plot(data.index, data['Lower Band'], label='Lower Band', color='orange', linestyle='--')
+            plt.plot(data.index, data['SMA_BB'], label='SMA of Bands', color='green', linestyle='--')
             
             # Plot buy and sell signals
             buy_signals = data[data['Trade'] == 1]
             sell_signals = data[data['Trade'] == -1]
-            
             plt.scatter(buy_signals.index, buy_signals['Close'], marker='^', color='g', label='Buy Signal', s=100)
             plt.scatter(sell_signals.index, sell_signals['Close'], marker='v', color='r', label='Sell Signal', s=100)
             
             plt.title(f'{symbol} Price with Buy and Sell Signals')
             plt.legend()
+            plt.grid()
+            
+            # Plot RSI
+            plt.subplot(2, 1, 2)
+            plt.plot(data.index, data['RSI'], label='RSI', color='purple')
+            plt.axhline(RSI_BUY_THRESHOLD, color='green', linestyle='--', label='Buy Threshold')
+            plt.axhline(RSI_SELL_THRESHOLD, color='red', linestyle='--', label='Sell Threshold')
+            plt.title(f'{symbol} RSI')
+            plt.legend()
+            plt.grid()
+
+            plt.tight_layout()
             plt.show()
 
 if __name__ == "__main__":
-    backtester = Backtester(TICKERS, START_DATE, END_DATE, INITIAL_BALANCE, INTERVAL)
+    backtester = Backtester(TICKERS, INITIAL_BALANCE, INTERVAL)
     backtester.fetch_data()
     backtester.compute_indicators()
     backtester.backtest()

@@ -71,7 +71,7 @@ class Alpaca_trader:
 
         return False
 
-    @staticmethod
+
     def submit_buy_order(self, ticker: str, qty: int):
 
         if self.is_market_open():

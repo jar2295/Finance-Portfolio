@@ -31,24 +31,16 @@ class Strategy:
                     print(f"No data found for {symbol}")
                     continue
 
-                # Compute Fibonacci SMAs
-                sma_columns = []
-                for n in self.fibonacci:
-                    column_name = f'SMA{n}'
-                    data[column_name] = data['Close'].rolling(window=n).mean()
-                    sma_columns.append(column_name)
+                # Calculate the MACD line (12-period EMA - 26-period EMA)
+                data['EMA_12'] = data['Close'].ewm(span=12, adjust=False).mean()
+                data['EMA_26'] = data['Close'].ewm(span=26, adjust=False).mean()
+                data['MACD'] = data['EMA_12'] - data['EMA_26']
+                
+                # Calculate the Signal line (9-period EMA of MACD line)
+                data['Signal'] = data['MACD'].ewm(span=9, adjust=False).mean()
 
-                # Compute average of Fibonacci SMAs
-                data['SMA_BB'] = data[sma_columns].mean(axis=1)
-
-                # Compute RSI
-                rsi = RSIIndicator(close=data["Close"], window=self.rsi_window).rsi()
-                data['RSI'] = rsi
-
-                # Compute Bollinger Bands
-                data['Rolling Std Dev'] = data['Close'].rolling(window=self.bb_window).std()
-                data['Upper Band'] = data['SMA_BB'] + (data['Rolling Std Dev'] * self.std_dev_multiplier)
-                data['Lower Band'] = data['SMA_BB'] - (data['Rolling Std Dev'] * self.std_dev_multiplier)
+                # Calculate the MACD Histogram
+                data['MACD_Histogram'] = data['MACD'] - data['Signal']
 
                 self.data[symbol] = data.dropna()
 

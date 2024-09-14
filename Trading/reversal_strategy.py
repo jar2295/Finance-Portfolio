@@ -18,7 +18,7 @@ class Strategy:
         self.rsi_lower = 30
         self.data = {}
         self.alpaca_trader = Alpaca_trader()
-        self.ticker = ['spy']  # Example tickers
+        self.ticker = ['TSLA']  # Example tickers
         self.running = True  # Control flag for the loop
 
     def get_ticker_info(self):
