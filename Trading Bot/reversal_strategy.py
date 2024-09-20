@@ -5,11 +5,11 @@ from ta.trend import sma_indicator
 from tqdm import tqdm
 import numpy as np
 import matplotlib.pyplot as plt
-from new_alpaca_framework import Alpaca_trader
+from alpaca_framework import Alpaca_trader
 import time
 
 class Strategy: 
-    def __init__(self) -> None:
+    def __init__(self, live_trading=True) -> None:
         self.fibonacci = [5, 8, 13]
         self.std_dev_multiplier = 1
         self.bb_window = 10
@@ -17,9 +17,14 @@ class Strategy:
         self.rsi_upper = 70
         self.rsi_lower = 30
         self.data = {}
-        self.alpaca_trader = Alpaca_trader()
         self.ticker = ['TSLA']  # Example tickers
         self.running = True  # Control flag for the loop
+
+        # Initialize Alpaca trader only for live trading
+        if live_trading:
+            self.alpaca_trader = Alpaca_trader()
+        else:
+            self.alpaca_trader = None  # No Alpaca trader for backtesting
 
     def get_ticker_info(self):
         for symbol in tqdm(self.ticker, desc="• Grabbing technical metrics for tickers"):
@@ -56,17 +61,23 @@ class Strategy:
                 print(f"KeyError for {symbol}: {e}")
                 continue
 
-
     def calculate_indicators(self):
         self.get_ticker_info()
 
         for symbol, data in self.data.items():
             try:
+                # Generate signals
                 if (data['RSI'].iloc[-1] > self.rsi_upper) and (data["Close"].iloc[-1] < data['Upper Band'].iloc[-1]):
-                    self.alpaca_trader.submit_sell_order(symbol, qty=1)  # Use instance method
+                    if self.alpaca_trader:
+                        self.alpaca_trader.submit_sell_order(symbol, qty=1)  # Use instance method
+                    else:
+                        print(f"Sell signal for {symbol}")
 
                 elif (data['RSI'].iloc[-1] < self.rsi_lower) and (data["Close"].iloc[-1] < data['Lower Band'].iloc[-1]):
-                    self.alpaca_trader.submit_buy_order(symbol, qty=1)  # Use instance method
+                    if self.alpaca_trader:
+                        self.alpaca_trader.submit_buy_order(symbol, qty=1)  # Use instance method
+                    else:
+                        print(f"Buy signal for {symbol}")
 
                 else:
                     print(f"No action for {symbol}")
@@ -75,17 +86,22 @@ class Strategy:
                 print(f"Error calculating indicators for {symbol}: {e}")
                 continue
 
+    def get_data(self):
+        self.get_ticker_info()
+        return self.data
+
     def run(self):
-        self.alpaca_trader.get_portfolio()
+        if self.alpaca_trader:
+            self.alpaca_trader.get_portfolio()
 
         while self.running:
             self.calculate_indicators()
-            time.sleep(10)  # Wait for 1 minute before fetching new data
+            time.sleep(10)  # Wait for 10 seconds before fetching new data
 
     def stop(self):
         self.running = False
         print("Stopping strategy...")
 
 if __name__ == "__main__":
-    strategy = Strategy()  # Initialize the strategy
+    strategy = Strategy(live_trading=True)  # Initialize the strategy for live trading
     strategy.run()  # Start continuous data fetching and trading

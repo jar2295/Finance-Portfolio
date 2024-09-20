@@ -1,0 +1,29 @@
+import requests
+from bs4 import BeautifulSoup
+import pandas as pd
+
+def get_nasdaq_list():
+        url = 'https://finance.yahoo.com/markets/stocks/most-active/'
+        response = requests.get(url)
+        soup = BeautifulSoup(response.text, 'html.parser')
+
+        # Example: Find the table or data containing the stock list
+        # This is an illustrative example; the actual HTML structure may differ
+        section = soup.find('tbody', {'class': 'body yf-42jv6g'})
+        table_rows = soup.find('tr')
+
+
+        #for row in table_rows:
+            # Extract ticker symbol
+            #ticker_tag = row.find('div', {'class': "name yf-ravs5v stacked"})
+            #ticker_symbol = ticker_tag.text.strip() if ticker_tag else 'N/A'
+            
+        # Print extracted information
+        print(table_rows)
+
+
+        
+        return 
+
+get_nasdaq_list()
+

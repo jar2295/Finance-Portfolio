@@ -6,6 +6,8 @@ from ta.trend import sma_indicator
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 import time
+import requests
+
 
 # Configuration Parameters
 TICKERS = ['SPXL']  # List of tickers to backtest
@@ -16,9 +18,10 @@ INITIAL_BALANCE = 500  # Initial balance for backtesting
 # Indicators Parameters
 FIBONACCI_SMA_PERIODS = [5, 8, 13]  # Fibonacci periods for SMAs
 RSI_WINDOW = 10  # Window for RSI calculation
-RSI_BUY_THRESHOLD = 30  # RSI threshold for buying
-RSI_SELL_THRESHOLD = 70  # RSI threshold for selling
+RSI_BUY_THRESHOLD = 65  # RSI threshold for buying
+RSI_SELL_THRESHOLD = 35  # RSI threshold for selling
 BB_WINDOW = 8  # Window for Bollinger Bands
+
 
 class Backtester:
     def __init__(self, tickers, initial_balance, interval):
@@ -27,7 +30,14 @@ class Backtester:
         self.data = {}
         self.interval = interval
         self.data_directory = 'data'
-        
+        self.holdings = {ticker: 0 for ticker in tickers}  # Track holdings for each ticker
+        self.balance = initial_balance  # Track account balance
+
+    def get_nasdaq_list():
+        url = 'https://www.nasdaq.com/market-activity/stocks'
+        response = requests.get(url)
+        # Parse the response to get the 
+
     def fetch_data(self):
         for symbol in tqdm(TICKERS, desc="• Grabbing technical metrics for tickers"):
             try:
@@ -43,7 +53,7 @@ class Backtester:
                 continue
 
             self.data[symbol] = data
-    
+
     def compute_indicators(self):
         for symbol, data in self.data.items():
             if data.empty:
@@ -77,24 +87,25 @@ class Backtester:
                 continue
             
             data['Position'] = 0
-            data['Trade'] = 0  # +1 for buy
-            balance = self.initial_balance
+            data['Trade'] = 0  # +1 for buy, -1 for sell
+            data['Trade Price'] = 0  # Price at which the trade was executed
 
-            data['Account Value'] = balance
-            
             # Simulate trading
             for i in range(1, len(data)):
+                current_price = data['Close'].iloc[i]
                 if data['RSI'].iloc[i] < RSI_BUY_THRESHOLD and data['Close'].iloc[i] < data['Lower Band'].iloc[i]:  # Buy signal
-
-
-                    data.at[data.index[i], 'Trade'] = 1
+                    if self.balance >= current_price:  # Check if we have enough balance to buy
+                        self.holdings[symbol] += 1
+                        self.balance -= current_price
+                        data.at[data.index[i], 'Trade'] = 1
+                        data.at[data.index[i], 'Trade Price'] = current_price
                 elif data['RSI'].iloc[i] > RSI_SELL_THRESHOLD and data['Close'].iloc[i] > data['Upper Band'].iloc[i]:  # Sell signal
-
-
-                    data.at[data.index[i], 'Trade'] = -1
-                
+                    if self.holdings[symbol] > 0:  # Check if we have holdings to sell
+                        self.holdings[symbol] -= 1
+                        self.balance += current_price
+                        data.at[data.index[i], 'Trade'] = -1
+                        data.at[data.index[i], 'Trade Price'] = current_price
             
-
             # Store results for plotting
             results[symbol] = data
 
